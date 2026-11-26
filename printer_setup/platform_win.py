@@ -224,6 +224,8 @@ class PowerShell:
             PRINTER_SETUP_ACTION=action,
             PRINTER_SETUP_ARGS=json.dumps(args, ensure_ascii=False),
         )
+        # 若父进程是 PowerShell 7，继承的 PSModulePath 会让 Windows PowerShell 5.1 加载模块失败
+        env.pop("PSModulePath", None)
         r = subprocess.run(
             cmd, env=env, capture_output=True, timeout=timeout,
             creationflags=no_window_flags(),
