@@ -8,6 +8,7 @@ def test_windows_driver_zip():
     with zipfile.ZipFile(driver_file(config.WIN_DRIVER_ZIP)) as zf:
         names = zf.namelist()
     assert config.WIN_SETUP_EXE in names and config.WIN_SETUP_CFG in names
+    assert config.WIN_INF_DIR + "/" + config.WIN_INF_FILE in names
 
 
 def test_mac_driver_zip():

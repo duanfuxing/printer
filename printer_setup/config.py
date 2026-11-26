@@ -17,6 +17,10 @@ MODE_REPAIR = "repair"
 WIN_DRIVER_ZIP = "windows.zip"
 WIN_SETUP_EXE = "UNI/essetup.exe"
 WIN_SETUP_CFG = "UNI/eSPDUNI.cfg"
+# 驱动包内的 INF（优先使用，失败时再用 essetup.exe）
+WIN_INF_DIR = "UNI/Driver/64bit"
+WIN_INF_FILE = "eSf6u.inf"
+WIN_DRIVER_NAME = "TOSHIBA Universal Printer 2"
 # 静默安装驱动时临时创建的打印机名称（安装完成后删除）
 WIN_SETUP_TMP_PRINTER = "TOSHIBA_SETUP_TMP"
 # ARM 版 Windows：东芝驱动只有 x86/x64，改用系统内置的通用驱动（按顺序尝试）

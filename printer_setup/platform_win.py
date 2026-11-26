@@ -123,6 +123,18 @@ try {
             if ($r.ReturnValue -ne 0) { throw "打印测试页失败，错误码 $($r.ReturnValue)" }
             Say "测试页已发送"
         }
+        'install-inf' {
+            if (-not (Test-Path $A.inf)) { throw "找不到驱动文件：$($A.inf)" }
+            $out = & "$env:SystemRoot\System32\pnputil.exe" /add-driver $A.inf /install 2>&1 | Out-String
+            Say ("  pnputil：" + (($out -split "`r?`n" | Where-Object { $_.Trim() }) -join ' / '))
+            try {
+                Add-PrinterDriver -Name $A.driver -ErrorAction Stop
+            } catch {
+                Say "按名称添加驱动失败，改用 INF 路径：$($_.Exception.Message)"
+                Add-PrinterDriver -Name $A.driver -InfPath $A.inf
+            }
+            if (Get-PrinterDriver -Name $A.driver -ErrorAction SilentlyContinue) { Say ("DRIVER=" + $A.driver) }
+        }
         'ensure-class-driver' {
             foreach ($n in $A.candidates) {
                 if (Get-PrinterDriver -Name $n -ErrorAction SilentlyContinue) { Say ("DRIVER=" + $n); break }
@@ -207,7 +219,7 @@ class PowerShell:
         return None
 
 
-def _install_driver(ps: PowerShell, opts: Options, workdir: Path, log) -> str:
+def _install_driver_essetup(ps: PowerShell, opts: Options, workdir: Path, log) -> str:
     zip_path = driver_file(config.WIN_DRIVER_ZIP)
     if not zip_path.exists():
         raise SetupError("找不到驱动包：%s" % zip_path)
@@ -233,12 +245,12 @@ def _install_driver(ps: PowerShell, opts: Options, workdir: Path, log) -> str:
     log("正在静默安装东芝驱动，可能需要 1-3 分钟，请耐心等待 ...")
     try:
         r = subprocess.run(
-            [str(exe)], cwd=str(exe.parent), timeout=900,
+            [str(exe)], cwd=str(exe.parent), timeout=600,
             capture_output=True, creationflags=no_window_flags(),
         )
         log("  驱动安装程序已结束（返回码 %s）" % r.returncode)
     except subprocess.TimeoutExpired:
-        raise SetupError("驱动安装超时（15 分钟）")
+        raise SetupError("驱动安装超时（10 分钟）")
 
     # 安装程序可能在后台继续运行，轮询等待驱动出现
     deadline = time.time() + 180
@@ -253,6 +265,36 @@ def _install_driver(ps: PowerShell, opts: Options, workdir: Path, log) -> str:
         ps.run("list-drivers", log=log, check=False)
         raise SetupError("驱动安装后未检测到东芝驱动")
     return driver
+
+
+def _install_driver_inf(ps: PowerShell, workdir: Path, log):
+    """用驱动包内的 INF 直接安装（快，无界面）。失败返回 None。"""
+    zip_path = driver_file(config.WIN_DRIVER_ZIP)
+    if not zip_path.exists():
+        raise SetupError("找不到驱动包：%s" % zip_path)
+    prefix = config.WIN_INF_DIR.rstrip("/") + "/"
+    extract = workdir / "inf"
+    with zipfile.ZipFile(zip_path) as zf:
+        members = [m for m in zf.namelist() if m.startswith(prefix)]
+        if not members:
+            return None
+        log("正在解压驱动文件 ...")
+        zf.extractall(extract, members)
+    inf = extract / config.WIN_INF_DIR / config.WIN_INF_FILE
+    log("正在安装东芝驱动（INF），请稍候 ...")
+    lines = ps.run("install-inf", log=log, check=False, timeout=600,
+                   inf=str(inf), driver=config.WIN_DRIVER_NAME)
+    if any(l.startswith("DRIVER=") for l in lines):
+        return config.WIN_DRIVER_NAME
+    return None
+
+
+def _install_driver(ps: PowerShell, opts: Options, workdir: Path, log) -> str:
+    driver = _install_driver_inf(ps, workdir, log)
+    if driver:
+        return driver
+    log("  INF 安装未成功，改用东芝安装程序 ...")
+    return _install_driver_essetup(ps, opts, workdir, log)
 
 
 def install(opts: Options, log, step) -> None:
