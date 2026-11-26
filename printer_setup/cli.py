@@ -21,7 +21,6 @@ def build_parser():
     p.add_argument("--no-default", dest="set_default", action="store_false")
     p.add_argument("--test-page", action="store_true")
     p.add_argument("--duplex", action="store_true")
-    p.add_argument("--yes", action="store_true", help="网络检测失败时仍继续")
     p.add_argument("--log-file", help="日志同时写入该文件")
     return p
 
@@ -72,7 +71,7 @@ def main(argv=None) -> int:
 
         opts = Options(name=args.name, ip=args.ip, port=args.port, mode=args.mode,
                        set_default=args.set_default, test_page=args.test_page, duplex=args.duplex)
-        installer.run(opts, log, confirm=(lambda _m: True) if args.yes else None)
+        installer.run(opts, log)
         log("RESULT: OK")
         return 0
     except SetupError as e:

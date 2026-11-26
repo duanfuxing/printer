@@ -9,7 +9,7 @@ def test_defaults_valid():
 
 def test_default_values():
     o = Options()
-    assert (o.name, o.ip, o.port) == ("前台打印机", "172.16.5.251", 50081)
+    assert (o.name, o.ip, o.port) == ("前台打印机", "172.16.5.251", 9100)
 
 
 def test_bad_inputs():

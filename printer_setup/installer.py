@@ -7,11 +7,10 @@ from .resources import is_mac, is_windows
 from .validate import normalize, validate
 
 
-def run(opts: Options, log, step=None, confirm=None) -> None:
+def run(opts: Options, log, step=None) -> None:
     """
     log(str)        输出日志
     step(str)       步骤标题
-    confirm(str)    网络检测失败时询问是否继续，返回 bool；为 None 时直接失败
     """
     step = step or (lambda s: log("== " + s))
     errors = validate(opts)
@@ -24,12 +23,11 @@ def run(opts: Options, log, step=None, confirm=None) -> None:
         "修复" if opts.mode == config.MODE_REPAIR else "新连接", opts.name, opts.ip, opts.port))
 
     step("网络检测")
-    if not netcheck.run_checks(opts.ip, opts.port, log):
-        msg = ("无法连接打印机 %s:%s。\n请确认电脑已连接公司网络（有线或 Wi-Fi）。\n\n是否仍然继续安装？"
-               % (opts.ip, opts.port))
-        if not (confirm and confirm(msg)):
-            raise SetupError("网络检测失败：无法连接 %s:%s，请检查网络后重试" % (opts.ip, opts.port))
-        log("  用户选择忽略网络检测结果，继续安装")
+    if netcheck.run_checks(opts.ip, opts.port, log):
+        log("  网络检测通过")
+    else:
+        log("  警告：当前无法连接打印机 %s:%s，请确认电脑已连接公司网络；继续安装，连上网络后即可打印"
+            % (opts.ip, opts.port))
 
     if is_windows():
         from . import platform_win as impl

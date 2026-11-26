@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
-from . import config, installer, netcheck
+from . import config, installer
 from .models import Options, SetupError
 from .resources import is_windows, log_file_path
 from .validate import validate
@@ -64,8 +64,6 @@ class App:
         btns.pack(fill="x", **pad)
         self.btn_start = ttk.Button(btns, text="开始", command=self.start)
         self.btn_start.pack(side="right")
-        self.btn_check = ttk.Button(btns, text="检测网络", command=self.check_network)
-        self.btn_check.pack(side="right", padx=8)
         self.status = ttk.Label(btns, text="就绪")
         self.status.pack(side="left")
 
@@ -87,13 +85,6 @@ class App:
     def step(self, title):
         self.q.put(("step", title))
 
-    def confirm(self, msg) -> bool:
-        ev = threading.Event()
-        box = {}
-        self.q.put(("confirm", (msg, ev, box)))
-        ev.wait()
-        return box.get("ok", False)
-
     def _write(self, line):
         self.text.configure(state="normal")
         self.text.insert("end", line + "\n")
@@ -112,10 +103,6 @@ class App:
                 elif kind == "step":
                     self.status.configure(text=data + " ...")
                     self._write("【%s】" % data)
-                elif kind == "confirm":
-                    msg, ev, box = data
-                    box["ok"] = messagebox.askyesno(config.APP_TITLE, msg, icon="warning")
-                    ev.set()
                 elif kind == "done":
                     self._finish(*data)
         except queue.Empty:
@@ -134,7 +121,6 @@ class App:
         self.busy = busy
         state = "disabled" if busy else "normal"
         self.btn_start.configure(state=state)
-        self.btn_check.configure(state=state)
         if busy:
             self.progress.start(12)
         else:
@@ -171,30 +157,6 @@ class App:
 
     _finish_cb = None
 
-    def check_network(self):
-        opts = self._options()
-        errors = [e for e in validate(opts) if "名称" not in e and "模式" not in e]
-        if errors:
-            messagebox.showerror(config.APP_TITLE, "\n".join(errors))
-            return
-        self._write("—" * 30)
-
-        def job():
-            if not netcheck.run_checks(opts.ip.strip(), int(opts.port), self.log):
-                raise SetupError("无法连接 %s:%s" % (opts.ip.strip(), opts.port))
-
-        def done(ok, err):
-            self.status.configure(text="网络正常" if ok else "网络异常")
-            if ok:
-                messagebox.showinfo(config.APP_TITLE, "网络正常，可以连接打印机。")
-            else:
-                messagebox.showerror(
-                    config.APP_TITLE,
-                    "%s\n\n请确认电脑已连接公司网络。\n%s" % (err, config.CONTACT))
-
-        self._finish_cb = done
-        self._run_bg(job)
-
     def start(self):
         opts = self._options()
         errors = validate(opts)
@@ -210,7 +172,7 @@ class App:
         started = time.time()
 
         def job():
-            installer.run(opts, self.log, self.step, self.confirm)
+            installer.run(opts, self.log, self.step)
 
         def done(ok, err):
             if ok:

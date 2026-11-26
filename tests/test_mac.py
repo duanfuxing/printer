@@ -35,7 +35,7 @@ def test_script_syntax(tmp_path, mode, duplex):
     opts = Options(name="前台 打印机'x", mode=mode, duplex=duplex)
     s = build_root_script(opts, queue_name(opts.ip, opts.port), ["Old Front"], "/tmp/a b.dmg.gz",
                           str(tmp_path), install_driver=True)
-    assert "socket://172.16.5.251:50081" in s
+    assert "socket://172.16.5.251:9100" in s
     assert ("Duplex=DuplexNoTumble" if duplex else "Duplex=None") in s
     assert ("lpadmin -x 'Old Front'" in s) == (mode == config.MODE_REPAIR)
     if shutil.which("bash") and not sys.platform.startswith("win"):

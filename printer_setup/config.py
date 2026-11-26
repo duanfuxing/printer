@@ -1,12 +1,12 @@
 """全局常量与默认参数。"""
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 APP_TITLE = "打印机连接助手"
 CONTACT = "如有疑问，请联系太逗技术部"
 
 DEFAULT_NAME = "前台打印机"
 DEFAULT_IP = "172.16.5.251"
-DEFAULT_PORT = 50081
+DEFAULT_PORT = 9100
 
 PRINTER_MODEL = "TOSHIBA e-STUDIO2021AC"
 
