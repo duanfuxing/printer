@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -37,7 +38,7 @@ def test_script_syntax(tmp_path, mode, duplex):
     assert "socket://172.16.5.251:50081" in s
     assert ("Duplex=DuplexNoTumble" if duplex else "Duplex=None") in s
     assert ("lpadmin -x 'Old Front'" in s) == (mode == config.MODE_REPAIR)
-    if shutil.which("bash"):
+    if shutil.which("bash") and not sys.platform.startswith("win"):
         p = tmp_path / "s.sh"
         p.write_text(s, encoding="utf-8")
         r = subprocess.run(["bash", "-n", str(p)], capture_output=True, text=True)
