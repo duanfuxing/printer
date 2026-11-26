@@ -58,4 +58,4 @@ python -m pytest               # 单元测试
 pyinstaller PrinterSetup.spec --noconfirm   # 打包
 ```
 
-GitHub Actions 会在每次推送时，分别在 Windows x64、macOS arm64 和 macOS x64 上运行单元测试并打包，然后用一台“假打印机”（`tests/fake_printer.py`）做端到端测试：真实安装驱动、添加打印机，执行新连接和修复两种模式，并确认测试页数据已发送到端口。推送 `v*` 标签时会自动发布 Release。
+GitHub Actions 会在每次推送时，分别在 Windows x64、macOS arm64 和 macOS x64 上运行单元测试并打包（Windows ARM 走系统内置驱动，CI 不单独测试），然后用一台“假打印机”（`tests/fake_printer.py`）做端到端测试：真实安装驱动、添加打印机，执行新连接和修复两种模式，并确认测试页数据已发送到端口。推送 `v*` 标签时会自动发布 Release。

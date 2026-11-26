@@ -38,7 +38,7 @@ else:
         info_plist={
             "CFBundleDisplayName": "打印机连接助手",
             "CFBundleName": "打印机连接助手",
-            "CFBundleShortVersionString": "1.0.1",
+            "CFBundleShortVersionString": "1.0.2",
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
         },
