@@ -10,7 +10,7 @@
 
 | 系统 | 文件 |
 |---|---|
-| Windows 10/11（64 位） | `PrinterSetup-windows-x64.exe` |
+| Windows 10/11（64 位，含 ARM 电脑） | `PrinterSetup-windows-x64.exe` |
 | Mac（M1/M2/M3/M4 芯片） | `PrinterSetup-macos-arm64.zip` |
 | Mac（Intel 芯片） | `PrinterSetup-macos-x64.zip` |
 
@@ -42,7 +42,7 @@
 
 | | Windows | macOS |
 |---|---|---|
-| 驱动 | `driver/windows.zip`（东芝通用驱动 essetup.exe，静默安装） | `driver/mac.zip`（`TOSHIBA_ColorMFP_S2` PPD） |
+| 驱动 | `driver/windows.zip`（东芝通用驱动 L2601，essetup.exe 静默安装）；ARM 电脑改用系统内置 Microsoft PCL6 Class Driver | `driver/mac.zip`（`TOSHIBA_ColorMFP_S2` PPD） |
 | 连接 | 标准 TCP/IP 端口 RAW `IP_<ip>_<port>` | `socket://<ip>:<port>` |
 | 权限 | 启动时 UAC 提权 | 安装时弹出系统密码框 |
 

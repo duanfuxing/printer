@@ -84,6 +84,7 @@ jobs:
           $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','50081','--out','recv.bin' -PassThru -NoNewWindow
           Start-Sleep 2
           foreach ($mode in 'new','repair') {
+            Remove-Item e2e.log -ErrorAction SilentlyContinue
             $p = Start-Process dist\PrinterSetup.exe -ArgumentList '--cli','--mode',$mode,'--ip','127.0.0.1','--port','50081','--test-page','--log-file','e2e.log' -Wait -PassThru
             Get-Content e2e.log -Encoding UTF8
             if ($p.ExitCode -ne 0) { exit 1 }
@@ -116,9 +117,44 @@ jobs:
             fake.log
           if-no-files-found: ignore
 
+  # 用 x64 安装包在真实 Windows ARM 机器上测试（转译运行 + 系统内置驱动）
+  test-windows-arm:
+    needs: build
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: PrinterSetup-windows-x64
+      - name: End-to-end install against fake printer (Windows ARM)
+        shell: pwsh
+        run: |
+          $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','50081','--out','recv.bin' -PassThru -NoNewWindow
+          Start-Sleep 2
+          foreach ($mode in 'new','repair') {
+            Remove-Item e2e.log -ErrorAction SilentlyContinue
+            $p = Start-Process .\PrinterSetup-windows-x64.exe -ArgumentList '--cli','--mode',$mode,'--ip','127.0.0.1','--port','50081','--duplex','--test-page','--log-file','e2e.log' -Wait -PassThru
+            Get-Content e2e.log -Encoding UTF8
+            if ($p.ExitCode -ne 0) { exit 1 }
+          }
+          Get-Printer | Format-Table Name, DriverName, PortName
+          for ($i = 0; $i -lt 30 -and -not ((Test-Path recv.bin) -and (Get-Item recv.bin).Length -gt 0); $i++) { Start-Sleep 2 }
+          if (-not (Test-Path recv.bin)) { Write-Error 'fake printer received nothing'; exit 1 }
+          Get-Item recv.bin | Format-List Name, Length
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-windows-arm
+          path: e2e.log
+          if-no-files-found: ignore
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, test-windows-arm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

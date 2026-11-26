@@ -19,6 +19,8 @@ WIN_SETUP_EXE = "UNI/essetup.exe"
 WIN_SETUP_CFG = "UNI/eSPDUNI.cfg"
 # 静默安装驱动时临时创建的打印机名称（安装完成后删除）
 WIN_SETUP_TMP_PRINTER = "TOSHIBA_SETUP_TMP"
+# ARM 版 Windows：东芝驱动只有 x86/x64，改用系统内置的通用驱动（按顺序尝试）
+WIN_ARM_CLASS_DRIVERS = ["Microsoft PCL6 Class Driver", "Microsoft PS Class Driver"]
 
 MAC_DRIVER_ZIP = "mac.zip"
 MAC_DMG_MEMBER = "CSW2601PPD01/normal/TOSHIBA_ColorMFP.dmg.gz"

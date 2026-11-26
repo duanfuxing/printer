@@ -123,6 +123,15 @@ try {
             if ($r.ReturnValue -ne 0) { throw "打印测试页失败，错误码 $($r.ReturnValue)" }
             Say "测试页已发送"
         }
+        'ensure-class-driver' {
+            foreach ($n in $A.candidates) {
+                if (Get-PrinterDriver -Name $n -ErrorAction SilentlyContinue) { Say ("DRIVER=" + $n); break }
+                try {
+                    Add-PrinterDriver -Name $n -ErrorAction Stop
+                    Say ("DRIVER=" + $n); break
+                } catch { Say "系统驱动 $n 不可用：$($_.Exception.Message)" }
+            }
+        }
         'exists' {
             if (Get-Printer -Name $A.name -ErrorAction SilentlyContinue) { Say "EXISTS=1" } else { Say "EXISTS=0" }
         }
@@ -259,14 +268,23 @@ def install(opts: Options, log, step) -> None:
         ps.run("remove-by-ip", log=log, ip=opts.ip, name=opts.name)
 
     step("检查驱动")
-    driver = None if opts.mode == config.MODE_REPAIR else ps.find_driver()
-    if driver:
-        log("  已安装驱动：%s" % driver)
+    if is_arm64():
+        log("  检测到 ARM 架构电脑，东芝驱动不支持 ARM，改用 Windows 内置驱动")
+        lines = ps.run("ensure-class-driver", log=log, check=False,
+                       candidates=config.WIN_ARM_CLASS_DRIVERS)
+        driver = next((l[7:].strip() for l in lines if l.startswith("DRIVER=")), None)
+        if not driver:
+            raise SetupError("找不到可用的 Windows 内置打印驱动（%s）" % "、".join(config.WIN_ARM_CLASS_DRIVERS))
+        log("  使用内置驱动：%s" % driver)
     else:
-        step("安装驱动")
-        driver = _install_driver(ps, opts, workdir, log)
-        log("  驱动安装成功：%s" % driver)
-    ps.run("remove-printer", log=log, check=False, name=tmp)
+        driver = None if opts.mode == config.MODE_REPAIR else ps.find_driver()
+        if driver:
+            log("  已安装驱动：%s" % driver)
+        else:
+            step("安装驱动")
+            driver = _install_driver(ps, opts, workdir, log)
+            log("  驱动安装成功：%s" % driver)
+        ps.run("remove-printer", log=log, check=False, name=tmp)
 
     step("添加打印机")
     ps.run(
@@ -287,6 +305,26 @@ def install(opts: Options, log, step) -> None:
 
     # 驱动安装程序可能延迟创建临时打印机，最后再清理一次
     ps.run("remove-printer", log=None, check=False, name=tmp)
+
+
+def is_arm64() -> bool:
+    """判断 Windows 是否为 ARM64（x64 程序在 ARM 上转译运行时也能正确识别）。"""
+    import os
+
+    if os.environ.get("PRINTER_SETUP_FORCE_ARM") == "1":  # 测试用
+        return True
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.windll.kernel32
+        proc, native = wintypes.USHORT(), wintypes.USHORT()
+        if k32.IsWow64Process2(k32.GetCurrentProcess(), ctypes.byref(proc), ctypes.byref(native)):
+            return native.value == 0xAA64  # IMAGE_FILE_MACHINE_ARM64
+    except Exception:
+        pass
+    arch = os.environ.get("PROCESSOR_ARCHITEW6432") or os.environ.get("PROCESSOR_ARCHITECTURE", "")
+    return arch.upper() == "ARM64"
 
 
 def is_admin() -> bool:
