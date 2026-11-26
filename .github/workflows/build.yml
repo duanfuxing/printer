@@ -1,0 +1,131 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: macos-15
+            target: macos-arm64
+          - os: macos-15-intel
+            target: macos-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Unit tests
+        run: python -m pytest -v
+
+      - name: Build
+        run: pyinstaller PrinterSetup.spec --noconfirm
+
+      # ---------- macOS ----------
+      - name: Self test (macOS)
+        if: runner.os == 'macOS'
+        run: ./dist/PrinterSetup.app/Contents/MacOS/PrinterSetup --self-test
+
+      - name: End-to-end install against fake printer (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python tests/fake_printer.py --port 50081 --out recv.bin > fake.log 2>&1 &
+          sleep 2
+          APP=./dist/PrinterSetup.app/Contents/MacOS/PrinterSetup
+          sudo $APP --cli --mode new --ip 127.0.0.1 --port 50081 --name "前台打印机" --test-page --log-file e2e.log
+          lpstat -v
+          sudo $APP --cli --mode repair --ip 127.0.0.1 --port 50081 --name "前台打印机" --duplex --test-page --log-file e2e.log
+          lpstat -v
+          lpoptions -p TOSHIBA_127_0_0_1_50081 | tr ' ' '\n' | grep -Ei 'duplex|printer-info' || true
+          for i in $(seq 1 30); do [ -s recv.bin ] && break; sleep 2; done
+          cat fake.log
+          ls -l recv.bin
+          test -s recv.bin
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          ditto -c -k --keepParent PrinterSetup.app ../PrinterSetup-${{ matrix.target }}.zip
+
+      # ---------- Windows ----------
+      - name: Self test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\PrinterSetup.exe -ArgumentList '--self-test','--log-file','self.log' -Wait -PassThru
+          Get-Content self.log
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - name: End-to-end install against fake printer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 25
+        run: |
+          $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','50081','--out','recv.bin' -PassThru -NoNewWindow
+          Start-Sleep 2
+          foreach ($mode in 'new','repair') {
+            $p = Start-Process dist\PrinterSetup.exe -ArgumentList '--cli','--mode',$mode,'--ip','127.0.0.1','--port','50081','--test-page','--log-file','e2e.log' -Wait -PassThru
+            Get-Content e2e.log -Encoding UTF8
+            if ($p.ExitCode -ne 0) { exit 1 }
+          }
+          Get-Printer | Format-Table Name, DriverName, PortName
+          Get-PrinterPort | Where-Object Name -like 'IP_*' | Format-Table Name, PrinterHostAddress, PortNumber
+          for ($i = 0; $i -lt 30 -and -not ((Test-Path recv.bin) -and (Get-Item recv.bin).Length -gt 0); $i++) { Start-Sleep 2 }
+          if (-not (Test-Path recv.bin)) { Write-Error 'fake printer received nothing'; exit 1 }
+          Get-Item recv.bin | Format-List Name, Length
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Copy-Item dist\PrinterSetup.exe PrinterSetup-${{ matrix.target }}.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PrinterSetup-${{ matrix.target }}
+          path: |
+            PrinterSetup-${{ matrix.target }}.*
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-${{ matrix.target }}
+          path: |
+            e2e.log
+            self.log
+            fake.log
+          if-no-files-found: ignore
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: PrinterSetup-*
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" PrinterSetup-* --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --generate-notes
