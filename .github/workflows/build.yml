@@ -48,14 +48,14 @@ jobs:
       - name: End-to-end install against fake printer (macOS)
         if: runner.os == 'macOS'
         run: |
-          python tests/fake_printer.py --port 50081 --out recv.bin > fake.log 2>&1 &
+          python tests/fake_printer.py --port 9100 --out recv.bin > fake.log 2>&1 &
           sleep 2
           APP=./dist/PrinterSetup.app/Contents/MacOS/PrinterSetup
-          sudo $APP --cli --mode new --ip 127.0.0.1 --port 50081 --name "前台打印机" --test-page --log-file e2e.log
+          sudo $APP --cli --mode new --ip 127.0.0.1 --port 9100 --name "前台打印机" --test-page --log-file e2e.log
           lpstat -v
-          sudo $APP --cli --mode repair --ip 127.0.0.1 --port 50081 --name "前台打印机" --duplex --test-page --log-file e2e.log
+          sudo $APP --cli --mode repair --ip 127.0.0.1 --port 9100 --name "前台打印机" --duplex --test-page --log-file e2e.log
           lpstat -v
-          lpoptions -p TOSHIBA_127_0_0_1_50081 | tr ' ' '\n' | grep -Ei 'duplex|printer-info' || true
+          lpoptions -p TOSHIBA_127_0_0_1_9100 | tr ' ' '\n' | grep -Ei 'duplex|printer-info' || true
           for i in $(seq 1 30); do [ -s recv.bin ] && break; sleep 2; done
           cat fake.log
           ls -l recv.bin
@@ -81,7 +81,7 @@ jobs:
         shell: pwsh
         timeout-minutes: 25
         run: |
-          $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','50081','--out','recv.bin' -PassThru -NoNewWindow
+          $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','9100','--out','recv.bin' -PassThru -NoNewWindow
           Start-Sleep 2
           foreach ($mode in 'new','repair') {
             ./scripts/run-e2e.ps1 -Exe dist\PrinterSetup.exe -Mode $mode
@@ -131,7 +131,7 @@ jobs:
       - name: End-to-end install against fake printer (Windows ARM)
         shell: pwsh
         run: |
-          $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','50081','--out','recv.bin' -PassThru -NoNewWindow
+          $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','9100','--out','recv.bin' -PassThru -NoNewWindow
           Start-Sleep 2
           foreach ($mode in 'new','repair') {
             ./scripts/run-e2e.ps1 -Exe .\PrinterSetup-windows-x64.exe -Mode $mode -Duplex

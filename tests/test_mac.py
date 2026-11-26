@@ -10,7 +10,7 @@ from printer_setup.platform_mac import (
     build_root_script, find_queues_for, parse_lpstat_v, queue_name, uri_host,
 )
 
-LPSTAT = """device for TOSHIBA_172_16_5_251_50081: socket://172.16.5.251:50081
+LPSTAT = """device for TOSHIBA_172_16_5_251_9100: socket://172.16.5.251:9100
 device for Old_Front: lpd://172.16.5.251/print
 device for Other: ipp://172.16.5.25/ipp/print
 device for Kitchen: dnssd://Kitchen._ipp._tcp.local./?uuid=1
@@ -18,15 +18,15 @@ device for Kitchen: dnssd://Kitchen._ipp._tcp.local./?uuid=1
 
 
 def test_queue_name():
-    assert queue_name("172.16.5.251", 50081) == "TOSHIBA_172_16_5_251_50081"
+    assert queue_name("172.16.5.251", 9100) == "TOSHIBA_172_16_5_251_9100"
 
 
 def test_parse_and_find():
     devices = parse_lpstat_v(LPSTAT)
     assert len(devices) == 4
     assert uri_host(devices["Other"]) == "172.16.5.25"
-    q = find_queues_for("172.16.5.251", "TOSHIBA_172_16_5_251_50081", devices)
-    assert q == ["Old_Front", "TOSHIBA_172_16_5_251_50081"]
+    q = find_queues_for("172.16.5.251", "TOSHIBA_172_16_5_251_9100", devices)
+    assert q == ["Old_Front", "TOSHIBA_172_16_5_251_9100"]
 
 
 @pytest.mark.parametrize("mode", [config.MODE_NEW, config.MODE_REPAIR])

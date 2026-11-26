@@ -21,7 +21,7 @@ def test_rewrite_cfg():
 
 
 def test_port_name():
-    assert port_name("172.16.5.251", 50081) == "IP_172.16.5.251_50081"
+    assert port_name("172.16.5.251", 9100) == "IP_172.16.5.251_9100"
 
 
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="Windows only")

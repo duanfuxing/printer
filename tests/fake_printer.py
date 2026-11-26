@@ -6,7 +6,7 @@ import threading
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=50081)
+    ap.add_argument("--port", type=int, default=9100)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     lock = threading.Lock()
