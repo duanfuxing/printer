@@ -36,17 +36,28 @@ function Remove-PrinterSafe($name) {
 function Trust-DriverPublisher($dir) {
     $added = @{}
     Get-ChildItem -Path $dir -Filter *.cat -ErrorAction SilentlyContinue | ForEach-Object {
-        $sig = Get-AuthenticodeSignature -FilePath $_.FullName
-        $cert = $sig.SignerCertificate
-        if ($cert -and -not $added.ContainsKey($cert.Thumbprint)) {
-            $added[$cert.Thumbprint] = $true
-            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher', 'LocalMachine')
-            $store.Open('ReadWrite')
-            $store.Add($cert)
-            $store.Close()
-            Say "  已信任驱动发布者：$($cert.GetNameInfo('SimpleName', $false))（签名状态 $($sig.Status)）"
+        # 直接用 .NET 读取 .cat（PKCS#7）中的证书，不依赖 PowerShell 模块
+        $col = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2Collection
+        $col.Import($_.FullName)
+        foreach ($cert in $col) {
+            $isCodeSign = $false
+            foreach ($ext in $cert.Extensions) {
+                if ($ext -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]) {
+                    foreach ($oid in $ext.EnhancedKeyUsages) { if ($oid.Value -eq '1.3.6.1.5.5.7.3.3') { $isCodeSign = $true } }
+                }
+                if ($ext -is [System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension] -and $ext.CertificateAuthority) { $isCodeSign = $false; break }
+            }
+            if ($isCodeSign -and -not $added.ContainsKey($cert.Thumbprint)) {
+                $added[$cert.Thumbprint] = $true
+                $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher', 'LocalMachine')
+                $store.Open('ReadWrite')
+                $store.Add($cert)
+                $store.Close()
+                Say "  已信任驱动发布者：$($cert.GetNameInfo('SimpleName', $false))"
+            }
         }
     }
+    if ($added.Count -eq 0) { Say "  未能从驱动签名中读取发布者证书" }
 }
 
 function Get-TargetPrinterCim($name) {
@@ -225,7 +236,8 @@ class PowerShell:
             PRINTER_SETUP_ARGS=json.dumps(args, ensure_ascii=False),
         )
         # 若父进程是 PowerShell 7，继承的 PSModulePath 会让 Windows PowerShell 5.1 加载模块失败
-        env.pop("PSModulePath", None)
+        for k in [k for k in env if k.upper() == "PSMODULEPATH"]:
+            env.pop(k)
         r = subprocess.run(
             cmd, env=env, capture_output=True, timeout=timeout,
             creationflags=no_window_flags(),
