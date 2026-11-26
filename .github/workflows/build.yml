@@ -84,10 +84,8 @@ jobs:
           $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','50081','--out','recv.bin' -PassThru -NoNewWindow
           Start-Sleep 2
           foreach ($mode in 'new','repair') {
-            Remove-Item e2e.log -ErrorAction SilentlyContinue
-            $p = Start-Process dist\PrinterSetup.exe -ArgumentList '--cli','--mode',$mode,'--ip','127.0.0.1','--port','50081','--test-page','--log-file','e2e.log' -Wait -PassThru
-            Get-Content e2e.log -Encoding UTF8
-            if ($p.ExitCode -ne 0) { exit 1 }
+            ./scripts/run-e2e.ps1 -Exe dist\PrinterSetup.exe -Mode $mode
+            if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           Get-Printer | Format-Table Name, DriverName, PortName
           Get-PrinterPort | Where-Object Name -like 'IP_*' | Format-Table Name, PrinterHostAddress, PortNumber
@@ -136,10 +134,8 @@ jobs:
           $fake = Start-Process python -ArgumentList 'tests/fake_printer.py','--port','50081','--out','recv.bin' -PassThru -NoNewWindow
           Start-Sleep 2
           foreach ($mode in 'new','repair') {
-            Remove-Item e2e.log -ErrorAction SilentlyContinue
-            $p = Start-Process .\PrinterSetup-windows-x64.exe -ArgumentList '--cli','--mode',$mode,'--ip','127.0.0.1','--port','50081','--duplex','--test-page','--log-file','e2e.log' -Wait -PassThru
-            Get-Content e2e.log -Encoding UTF8
-            if ($p.ExitCode -ne 0) { exit 1 }
+            ./scripts/run-e2e.ps1 -Exe .\PrinterSetup-windows-x64.exe -Mode $mode -Duplex
+            if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           Get-Printer | Format-Table Name, DriverName, PortName
           for ($i = 0; $i -lt 30 -and -not ((Test-Path recv.bin) -and (Get-Item recv.bin).Length -gt 0); $i++) { Start-Sleep 2 }
