@@ -175,6 +175,11 @@ try {
         'trust-publisher' {
             Trust-DriverPublisher $A.dir
         }
+        'arch' {
+            # System32\powershell.exe 在 ARM 上以原生 ARM64 运行，能拿到真实架构
+            $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Architecture
+            Say ("ARCH=" + $env:PROCESSOR_ARCHITECTURE + "/" + $cpu)
+        }
         'ensure-class-driver' {
             foreach ($n in $A.candidates) {
                 if (Get-PrinterDriver -Name $n -ErrorAction SilentlyContinue) { Say ("DRIVER=" + $n); break }
@@ -334,10 +339,30 @@ def _install_driver_inf(ps: PowerShell, workdir: Path, log):
     return None
 
 
+def _ps_is_arm64(ps: PowerShell) -> bool:
+    lines = ps.run("arch", check=False)
+    arch = next((l[5:] for l in lines if l.startswith("ARCH=")), "")
+    # Win32_Processor.Architecture: 12 = ARM64
+    return "ARM64" in arch.upper() or arch.endswith("/12")
+
+
+def _class_driver(ps: PowerShell, log) -> str:
+    lines = ps.run("ensure-class-driver", log=log, check=False,
+                   candidates=config.WIN_ARM_CLASS_DRIVERS)
+    driver = next((l[7:].strip() for l in lines if l.startswith("DRIVER=")), None)
+    if not driver:
+        raise SetupError("找不到可用的 Windows 内置打印驱动（%s）" % "、".join(config.WIN_ARM_CLASS_DRIVERS))
+    log("  使用内置驱动：%s" % driver)
+    return driver
+
+
 def _install_driver(ps: PowerShell, opts: Options, workdir: Path, log) -> str:
     driver = _install_driver_inf(ps, workdir, log)
     if driver:
         return driver
+    if _ps_is_arm64(ps):
+        log("  东芝驱动不支持本机架构，改用 Windows 内置驱动")
+        return _class_driver(ps, log)
     log("  INF 安装未成功，改用东芝安装程序 ...")
     return _install_driver_essetup(ps, opts, workdir, log)
 
@@ -355,14 +380,9 @@ def install(opts: Options, log, step) -> None:
         ps.run("remove-by-ip", log=log, ip=opts.ip, name=opts.name)
 
     step("检查驱动")
-    if is_arm64():
+    if is_arm64() or _ps_is_arm64(ps):
         log("  检测到 ARM 架构电脑，东芝驱动不支持 ARM，改用 Windows 内置驱动")
-        lines = ps.run("ensure-class-driver", log=log, check=False,
-                       candidates=config.WIN_ARM_CLASS_DRIVERS)
-        driver = next((l[7:].strip() for l in lines if l.startswith("DRIVER=")), None)
-        if not driver:
-            raise SetupError("找不到可用的 Windows 内置打印驱动（%s）" % "、".join(config.WIN_ARM_CLASS_DRIVERS))
-        log("  使用内置驱动：%s" % driver)
+        driver = _class_driver(ps, log)
     else:
         driver = None if opts.mode == config.MODE_REPAIR else ps.find_driver()
         if driver:
