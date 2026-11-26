@@ -32,6 +32,23 @@ function Remove-PrinterSafe($name) {
     Remove-Printer -Name $name
 }
 
+# 把驱动签名证书加入“受信任的发布者”，避免安装时弹出“是否信任此发布者”的确认窗口
+function Trust-DriverPublisher($dir) {
+    $added = @{}
+    Get-ChildItem -Path $dir -Filter *.cat -ErrorAction SilentlyContinue | ForEach-Object {
+        $sig = Get-AuthenticodeSignature -FilePath $_.FullName
+        $cert = $sig.SignerCertificate
+        if ($cert -and -not $added.ContainsKey($cert.Thumbprint)) {
+            $added[$cert.Thumbprint] = $true
+            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher', 'LocalMachine')
+            $store.Open('ReadWrite')
+            $store.Add($cert)
+            $store.Close()
+            Say "  已信任驱动发布者：$($cert.GetNameInfo('SimpleName', $false))（签名状态 $($sig.Status)）"
+        }
+    }
+}
+
 function Get-TargetPrinterCim($name) {
     $p = Get-CimInstance -ClassName Win32_Printer | Where-Object { $_.Name -eq $name } | Select-Object -First 1
     if (-not $p) { throw "找不到打印机：$name" }
@@ -125,8 +142,17 @@ try {
         }
         'install-inf' {
             if (-not (Test-Path $A.inf)) { throw "找不到驱动文件：$($A.inf)" }
-            $out = & "$env:SystemRoot\System32\pnputil.exe" /add-driver $A.inf /install 2>&1 | Out-String
-            Say ("  pnputil：" + (($out -split "`r?`n" | Where-Object { $_.Trim() }) -join ' / '))
+            Trust-DriverPublisher (Split-Path $A.inf)
+            $outFile = Join-Path $env:TEMP 'printer_setup_pnputil.txt'
+            $proc = Start-Process "$env:SystemRoot\System32\pnputil.exe" -ArgumentList @('/add-driver', "`"$($A.inf)`"", '/install') `
+                -NoNewWindow -PassThru -RedirectStandardOutput $outFile
+            if (-not $proc.WaitForExit(180000)) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                Get-Process drvinst -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+                throw "驱动安装超时（3 分钟），可能被系统安全确认窗口阻塞"
+            }
+            $out = Get-Content $outFile -ErrorAction SilentlyContinue | Where-Object { $_.Trim() }
+            Say ("  pnputil：" + ($out -join ' / '))
             try {
                 Add-PrinterDriver -Name $A.driver -ErrorAction Stop
             } catch {
@@ -134,6 +160,9 @@ try {
                 Add-PrinterDriver -Name $A.driver -InfPath $A.inf
             }
             if (Get-PrinterDriver -Name $A.driver -ErrorAction SilentlyContinue) { Say ("DRIVER=" + $A.driver) }
+        }
+        'trust-publisher' {
+            Trust-DriverPublisher $A.dir
         }
         'ensure-class-driver' {
             foreach ($n in $A.candidates) {
@@ -242,6 +271,8 @@ def _install_driver_essetup(ps: PowerShell, opts: Options, workdir: Path, log) -
         encoding="ascii",
         newline="",
     )
+    ps.run("trust-publisher", log=log, check=False,
+           dir=str(extract / config.WIN_INF_DIR))
     log("正在静默安装东芝驱动，可能需要 1-3 分钟，请耐心等待 ...")
     try:
         r = subprocess.run(
