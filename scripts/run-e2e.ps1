@@ -7,9 +7,9 @@ param(
 )
 $log = Join-Path (Get-Location) 'e2e.log'
 Remove-Item $log -ErrorAction SilentlyContinue
-$args = @('--cli', '--mode', $Mode, '--ip', '127.0.0.1', '--port', '50081', '--test-page', '--log-file', $log)
-if ($Duplex) { $args += '--duplex' }
-$p = Start-Process $Exe -ArgumentList $args -PassThru
+$cliArgs = @('--cli', '--mode', $Mode, '--ip', '127.0.0.1', '--port', '50081', '--test-page', '--log-file', $log)
+if ($Duplex) { $cliArgs += '--duplex' }
+$p = Start-Process $Exe -ArgumentList $cliArgs -PassThru
 $pos = 0
 $sw = [Diagnostics.Stopwatch]::StartNew()
 function Flush-Log {
